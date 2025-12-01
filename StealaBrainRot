@@ -1,0 +1,285 @@
+-- Your two scripts + Fluent menu • Exact same size • Nothing changed in your code
+-- Size = 520x400 (same as original Stellar)
+
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+
+local Window = Fluent:CreateWindow({
+    Title = "Steal a Brainrot  Stellar",
+    SubTitle = "Your ESPs • 100% Your Code",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(520, 400),   -- EXACT SAME SIZE AS BEFORE
+    Acrylic = false,
+    Theme = "Darker",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+
+local Tab = Window:AddTab({ Title = "ESP", Icon = "eye" })
+
+-- ================================================
+-- 1. YOUR "rot esp.txt" — GOD + SECRET ESP (unchanged)
+-- ================================================
+local Plots = workspace:WaitForChild("Plots")
+local myPlot = nil
+for _, plot in Plots:GetChildren() do
+    local base = plot:FindFirstChild("YourBase", true)
+    if base and pcall(function() return base.Enabled end) and base.Enabled then
+        myPlot = plot.Name; break
+    end
+end
+
+local godEspEnabled = true
+local hue = 0
+game:GetService("RunService").Heartbeat:Connect(function(dt)
+    if godEspEnabled then hue = (hue + dt * 0.3) % 1 end
+end)
+local function rainbow() return Color3.fromHSV(hue, 1, 1) end
+
+local function getIncome(frame)
+    for _, v in frame:GetChildren() do
+        if v:IsA("TextLabel") and v.Text:match("$") and v.Text:match("/s") then
+            return v.Text
+        end
+    end
+    return "?$/s"
+end
+
+local function clearGodESP()
+    for _, v in Plots:GetDescendants() do
+        if v:IsA("BillboardGui") and v.Name:match("_ESP$") then v:Destroy() end
+    end
+end
+
+local function updateGod()
+    if not godEspEnabled then return end
+    for _, plot in Plots:GetChildren() do
+        if myPlot and plot.Name == myPlot then continue end
+        for _, rarityLabel in plot:GetDescendants() do
+            if rarityLabel.Name == "Rarity" and rarityLabel:IsA("TextLabel") then
+                local rarity = rarityLabel.Text
+                if rarity == "Brainrot God" or rarity == "Secret" then
+                    local model  = rarityLabel.Parent.Parent
+                    local income = getIncome(rarityLabel.Parent)
+
+                    local bb = model:FindFirstChild(rarity.."_ESP") or Instance.new("BillboardGui")
+                    bb.Name = rarity.."_ESP"
+                    bb.Size = UDim2.new(0, 130, 0, 36)
+                    bb.StudsOffset = Vector3.new(0, 3, 0)
+                    bb.AlwaysOnTop = true
+                    bb.Parent = model
+
+                    local label = bb:FindFirstChildOfClass("TextLabel") or Instance.new("TextLabel", bb)
+                    label.Text = income
+                    label.BackgroundTransparency = 1
+                    label.TextScaled = false
+                    label.TextSize = 20
+                    label.Font = Enum.Font.GothamBold
+                    label.Size = UDim2.new(1,0,1,0)
+                    label.TextStrokeTransparency = 0
+
+                    if rarity == "Brainrot God" then
+                        label.TextColor3 = rainbow()
+                        label.TextStrokeColor3 = Color3.new(0,0,0)
+                    else
+                        label.TextColor3 = Color3.new(0,0,0)
+                        label.TextStrokeColor3 = Color3.new(1,1,1)
+                    end
+                end
+            end
+        end
+    end
+end
+
+task.spawn(function()
+    while task.wait(0.25) do
+        if godEspEnabled then pcall(updateGod) end
+    end
+end)
+
+-- ================================================
+-- 2. YOUR "Steal a brin rot script.txt" — TIMER ESP (100% unchanged)
+-- ================================================
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
+local Camera = Workspace.CurrentCamera
+
+local PlotESP = {}
+local ESPEnabled = true
+local modifiedTimers = {}
+
+local function CreateText()
+    local t = Drawing.new("Text")
+    t.Size = 20
+    t.Color = Color3.fromRGB(255, 255, 255)
+    t.Center = true
+    t.Outline = true
+    t.OutlineColor = Color3.new(0, 0, 0)
+    t.Font = Drawing.Fonts.Plex
+    t.Visible = false
+    return t
+end
+
+local function WorldToScreen(pos)
+    local screen, onScreen = Camera:WorldToViewportPoint(pos)
+    return Vector2.new(screen.X, screen.Y), onScreen
+end
+
+local function nukeTimer(obj)
+    if not (obj:IsA("TextLabel") or obj:IsA("TextButton")) then return end
+    if modifiedTimers[obj] or not obj.Text:match("%d+S") then return end
+    modifiedTimers[obj] = true
+    obj.TextSize = 200
+    obj.Font = Enum.Font.GothamBlack
+    obj.TextScaled = false
+    obj.BackgroundTransparency = 1
+    obj.TextStrokeTransparency = 0
+    task.spawn(function()
+        while obj and obj.Parent do
+            obj.TextColor3 = Color3.fromHSV(tick() % 3 / 3, 1, 1)
+            task.wait(0.08)
+        end
+    end)
+end
+
+local function getRealTimer(plot)
+    for _, obj in pairs(plot:GetDescendants()) do
+        if (obj:IsA("TextLabel") or obj:IsA("TextButton")) and obj.Text ~= "" then
+            local text = obj.Text:upper()
+            if text:find("LOCK") or text:find("BASE") or text:find("LOCKED") or text:match("%d+S") then
+                if text:find("LOCKED") then return "LOCKED" end
+                if text:match("%d+S") then return obj.Text end
+            end
+        end
+    end
+    return "No Timer"
+end
+
+local function CreatePlotESP(plot)
+    if PlotESP[plot] then return end
+    PlotESP[plot] = {
+        Plot = plot,
+        Owner = CreateText(),
+        PlotLbl = CreateText(),
+        Pets = CreateText(),
+        Timer = CreateText(),
+        CacheTimer = "No Timer",
+        CachePets = 0,
+        CacheOwner = "Empty",
+        LastUpdate = 0
+    }
+end
+
+local function Update(data)
+    local plot = data.Plot
+    if not plot or not plot.Parent then PlotESP[plot] = nil return end
+    local pos = plot:GetPivot().Position
+    local scr, onScreen = WorldToScreen(pos)
+    if not onScreen or not ESPEnabled then
+        for _, v in pairs({data.Owner, data.PlotLbl, data.Pets, data.Timer}) do v.Visible = false end
+        return
+    end
+
+    if tick() - data.LastUpdate > 0.3 then
+        data.LastUpdate = tick()
+        data.CacheTimer = getRealTimer(plot)
+        local podiums = plot:FindFirstChild("AnimalPodiums")
+        data.CachePets = 0
+        if podiums then
+            for _, p in podiums:GetChildren() do
+                if p:FindFirstChild("AnimalOverhead", true) then data.CachePets += 1 end
+            end
+        end
+        local sign = plot:FindFirstChild("PlotSign")
+        if sign then
+            local gui = sign:FindFirstChild("SurfaceGui")
+            if gui then
+                for _, lbl in gui:GetDescendants() do
+                    if lbl:IsA("TextLabel") and lbl.Text:find("[A-Za-z]") then
+                        data.CacheOwner = lbl.Text:gsub("Owner: ", ""):gsub("Player: ", "")
+                        break
+                    end
+                end
+            end
+        end
+    end
+
+    local y = scr.Y
+    data.Owner.Text = "Owner: " .. data.CacheOwner
+    data.Owner.Position = Vector2.new(scr.X, y - 75)
+    data.Owner.Visible = true
+
+    data.PlotLbl.Text = "Plot"
+    data.PlotLbl.Position = Vector2.new(scr.X, y - 55)
+    data.PlotLbl.Visible = true
+
+    data.Pets.Text = "Pets: " .. data.CachePets
+    data.Pets.Position = Vector2.new(scr.X, y - 35)
+    data.Pets.Visible = true
+
+    local timer = data.CacheTimer
+    data.Timer.Text = timer
+    data.Timer.Position = Vector2.new(scr.X, y - 10)
+
+    if timer == "LOCKED" then
+        data.Timer.Color = Color3.fromRGB(255, 60, 60)
+        data.Timer.Size = 24
+    elseif timer:match("%d+S") then
+        data.Timer.Color = Color3.fromHSV(tick() % 3 / 3, 1, 1)
+        data.Timer.Size = 26
+    else
+        data.Timer.Color = Color3.fromRGB(200, 200, 200)
+        data.Timer.Size = 19
+    end
+    data.Timer.Visible = true
+end
+
+RunService.Heartbeat:Connect(function()
+    for _, d in pairs(PlotESP) do pcall(Update, d) end
+end)
+
+for _, plot in pairs(Workspace.Plots:GetChildren()) do
+    if plot:IsA("Model") and #plot.Name == 36 then CreatePlotESP(plot) end
+end
+
+Workspace.Plots.ChildAdded:Connect(function(p)
+    task.wait(0.5)
+    if #p.Name == 36 then CreatePlotESP(p) end
+end)
+
+Workspace.Plots.DescendantAdded:Connect(function(obj)
+    task.delay(0.1, nukeTimer, obj)
+end)
+
+-- ================================================
+-- MENU TOGGLES (your keybinds stay the same)
+-- ================================================
+Tab:AddToggle("GodSecretToggle", {
+    Title = "God + Secret ESP (Rainbow Income)",
+    Default = true,
+    Callback = function(v)
+        godEspEnabled = v
+        if not v then clearGodESP() end
+    end
+})
+
+Tab:AddToggle("TimerESPToggle", {
+    Title = "Real Timer ESP (Rich Rainbow)",
+    Default = true,
+    Callback = function(v) ESPEnabled = v end
+})
+
+-- Your original keybinds (INSERT & F2)
+UserInputService.InputBegan:Connect(function(i, gp)
+    if gp then return end
+    if i.KeyCode == Enum.KeyCode.Insert then
+        godEspEnabled = not godEspEnabled
+        Fluent:Notify({Title="God/Secret ESP", Content=godEspEnabled and "ON" or "OFF"})
+        if not godEspEnabled then clearGodESP() end
+    elseif i.KeyCode == Enum.KeyCode.F2 then
+        ESPEnabled = not ESPEnabled
+        StarterGui:SetCore("SendNotification", {Title="REAL TIMER ESP", Text=ESPEnabled and "Enabled" or "Disabled", Duration=2})
+    end
+end)
+
+Fluent:Notify({Title="Loaded", Content="Your two scripts • Same size • INSERT & F2", Duration=8})

@@ -228,7 +228,7 @@ AddToggle(Combat, "Trigger Bot (Internal)", false, function(state) getgenv().Tri
 AddToggle(Combat, "Rivals Silent Aim", false, function(state) getgenv().SilentAimEnabled = state end)
 AddSlider(Combat, "Aim Distance", 10, 1000, 300, function(v) getgenv().AimDistance = v end)
 AddSlider(Combat, "Aim FOV (pixels)", 50, 500, 150, function(v) getgenv().AimFOV = v end)
--- MOVEMENT GLOBALS & FUNCTIONS (unchanged - already perfect)
+-- MOVEMENT GLOBALS & FUNCTIONS (FIXED: Individual connection management to prevent cross-disabling)
 getgenv().SpeedHackEnabled = false
 getgenv().SpeedValue = 100
 getgenv().JumpBoostEnabled = false
@@ -239,68 +239,88 @@ getgenv().FlyEnabled = false
 getgenv().FlySpeed = 50
 getgenv().NoClipEnabled = false
 getgenv().InfiniteJumpEnabled = false
-local MovementConnections = {}
 local bodyVelocity, bodyGyro = nil, nil
-local noclipLoop = nil
-local function clearAllMovement()
-    for _, conn in pairs(MovementConnections) do if conn and conn.Connected then conn:Disconnect() end end
-    MovementConnections = {}
-    if noclipLoop then noclipLoop:Disconnect() noclipLoop = nil end
-    if bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
-    if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
-    if LocalPlayer.Character then
-        LocalPlayer.Character:FindFirstChildOfClass("Humanoid").PlatformStand = false
-        for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
-            if part:IsA("BasePart") then part.CanCollide = true end
-        end
-    end
-end
+local speedConn, jumpConn, superConn, flyConn, noclipConn, infJumpConn = nil, nil, nil, nil, nil, nil
 -- Speed
 local function updateSpeed()
-    clearAllMovement()
+    if speedConn then speedConn:Disconnect() speedConn = nil end
+    local char = LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            if getgenv().SpeedHackEnabled then
+                hum.WalkSpeed = getgenv().SpeedValue
+            else
+                hum.WalkSpeed = 16
+            end
+        end
+    end
     if getgenv().SpeedHackEnabled then
-        table.insert(MovementConnections, RunService.RenderStepped:Connect(function()
-            if LocalPlayer.Character then
-                local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        speedConn = RunService.Heartbeat:Connect(function()
+            local char = LocalPlayer.Character
+            if char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
                 if hum then hum.WalkSpeed = getgenv().SpeedValue end
             end
-        end))
+        end)
     end
 end
 -- Jump Boost
 local function updateJumpBoost()
-    clearAllMovement()
-    if getgenv().JumpBoostEnabled then
-        table.insert(MovementConnections, RunService.Stepped:Connect(function()
-            if LocalPlayer.Character then
-                local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-                if hum then hum.UseJumpPower = true hum.JumpPower = getgenv().JumpBoostPower end
+    if jumpConn then jumpConn:Disconnect() jumpConn = nil end
+    local char = LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            if getgenv().JumpBoostEnabled then
+                hum.UseJumpPower = true
+                hum.JumpPower = getgenv().JumpBoostPower
+            else
+                hum.UseJumpPower = false
             end
-        end))
+        end
+    end
+    if getgenv().JumpBoostEnabled then
+        jumpConn = RunService.Stepped:Connect(function()
+            local char = LocalPlayer.Character
+            if char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    hum.UseJumpPower = true
+                    hum.JumpPower = getgenv().JumpBoostPower
+                end
+            end
+        end)
     end
 end
 -- Super Jump
 local function updateSuperJump()
-    clearAllMovement()
+    if superConn then superConn:Disconnect() superConn = nil end
     if getgenv().SuperJumpEnabled then
-        table.insert(MovementConnections, RunService.RenderStepped:Connect(function()
-            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-                local root = LocalPlayer.Character.HumanoidRootPart
+        superConn = RunService.RenderStepped:Connect(function()
+            local char = LocalPlayer.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                local root = char.HumanoidRootPart
                 if hum and UIS:IsKeyDown(Enum.KeyCode.Space) and hum.FloorMaterial == Enum.Material.Air then
                     root.Velocity = Vector3.new(root.Velocity.X, getgenv().SuperJumpPower, root.Velocity.Z)
                 end
             end
-        end))
+        end)
     end
 end
 -- Fly
-local function startFly(char)
-    clearAllMovement()
-    if not getgenv().FlyEnabled or not char then return end
+local function updateFly()
+    if bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
+    if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
+    if flyConn then flyConn:Disconnect() flyConn = nil end
+    local char = LocalPlayer.Character
+    if not char then return end
     local root = char:FindFirstChild("HumanoidRootPart")
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not root or not hum then return end
+    hum.PlatformStand = false
+    if not getgenv().FlyEnabled then return end
     hum.PlatformStand = true
     bodyVelocity = Instance.new("BodyVelocity", root)
     bodyVelocity.MaxForce = Vector3.new(1e5, 1e5, 1e5)
@@ -309,10 +329,9 @@ local function startFly(char)
     bodyGyro.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
     bodyGyro.P = 10000
     bodyGyro.CFrame = root.CFrame
-    local flyConn = RunService.RenderStepped:Connect(function()
+    flyConn = RunService.RenderStepped:Connect(function()
         if not getgenv().FlyEnabled or not root.Parent then
-            clearAllMovement()
-            if hum then hum.PlatformStand = false end
+            updateFly()
             return
         end
         local cam = workspace.CurrentCamera
@@ -324,15 +343,23 @@ local function startFly(char)
         bodyVelocity.Velocity = move.Magnitude > 0 and (cam.CFrame:VectorToWorldSpace(move.Unit) * getgenv().FlySpeed) or Vector3.new()
         bodyGyro.CFrame = cam.CFrame
     end)
-    table.insert(MovementConnections, flyConn)
 end
 -- Noclip
 local function updateNoclip()
-    clearAllMovement()
+    if noclipConn then noclipConn:Disconnect() noclipConn = nil end
+    local char = LocalPlayer.Character
+    if char then
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = true
+            end
+        end
+    end
     if getgenv().NoClipEnabled then
-        noclipLoop = RunService.Stepped:Connect(function()
-            if LocalPlayer.Character then
-                for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+        noclipConn = RunService.Stepped:Connect(function()
+            local char = LocalPlayer.Character
+            if char then
+                for _, part in pairs(char:GetDescendants()) do
                     if part:IsA("BasePart") then
                         part.CanCollide = false
                     end
@@ -342,34 +369,34 @@ local function updateNoclip()
     end
 end
 -- Infinite Jump
-local infJumpConn
 local function updateInfJump()
-    if infJumpConn then infJumpConn:Disconnect() end
+    if infJumpConn then infJumpConn:Disconnect() infJumpConn = nil end
     if getgenv().InfiniteJumpEnabled then
         infJumpConn = UIS.JumpRequest:Connect(function()
-            local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            local char = LocalPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
             if hum then hum:ChangeState("Jumping") end
         end)
     end
 end
 LocalPlayer.CharacterAdded:Connect(function(char)
     task.wait(0.5)
-    clearAllMovement()
-    if getgenv().FlyEnabled then startFly(char) end
-    if getgenv().SpeedHackEnabled then updateSpeed() end
-    if getgenv().JumpBoostEnabled then updateJumpBoost() end
-    if getgenv().SuperJumpEnabled then updateSuperJump() end
-    if getgenv().NoClipEnabled then updateNoclip() end
+    updateSpeed()
+    updateJumpBoost()
+    updateSuperJump()
+    updateFly()
+    updateNoclip()
+    updateInfJump()
 end)
 -- Movement UI
 AddToggle(Movement, "Speed Hack", false, function(v) getgenv().SpeedHackEnabled = v updateSpeed() end)
 AddToggle(Movement, "Jump Boost", false, function(v) getgenv().JumpBoostEnabled = v updateJumpBoost() end)
 AddToggle(Movement, "Super Jump (Hold Space in Air)", false, function(v) getgenv().SuperJumpEnabled = v updateSuperJump() end)
-AddToggle(Movement, "Fly (WASD + Space/Shift)", false, function(v) getgenv().FlyEnabled = v if v and LocalPlayer.Character then startFly(LocalPlayer.Character) else clearAllMovement() end end)
+AddToggle(Movement, "Fly (WASD + Space/Shift)", false, function(v) getgenv().FlyEnabled = v updateFly() end)
 AddToggle(Movement, "Noclip", false, function(v) getgenv().NoClipEnabled = v updateNoclip() end)
 AddToggle(Movement, "Infinite Jump", false, function(v) getgenv().InfiniteJumpEnabled = v updateInfJump() end)
-AddSlider(Movement, "Speed Value", 16, 500, 100, function(v) getgenv().SpeedValue = v end)
-AddSlider(Movement, "Jump Boost Power", 50, 300, 100, function(v) getgenv().JumpBoostPower = v end)
+AddSlider(Movement, "Speed Value", 16, 500, 100, function(v) getgenv().SpeedValue = v updateSpeed() end)
+AddSlider(Movement, "Jump Boost Power", 50, 300, 100, function(v) getgenv().JumpBoostPower = v updateJumpBoost() end)
 AddSlider(Movement, "Super Jump Power", 100, 500, 200, function(v) getgenv().SuperJumpPower = v end)
 AddSlider(Movement, "Fly Speed", 16, 200, 50, function(v) getgenv().FlySpeed = v end)
 -- FULL COMBAT (Aimbot + Silent Aim + TriggerBot)
@@ -1206,7 +1233,7 @@ CreditsLabel.Font = Enum.Font.Gotham
 CreditsLabel.TextSize = 16
 CreditsLabel.TextXAlignment = Enum.TextXAlignment.Center
 CreditsLabel.Parent = CreditsFrame
--- Discord Button (after credits)
+-- Discord Button
 AddButton(Settings, "Join Discord Server (Support & Updates)", function()
     if setclipboard then
         setclipboard("https://discord.gg/h4NMN3nXDZ")
@@ -1215,5 +1242,4 @@ AddButton(Settings, "Join Discord Server (Support & Updates)", function()
         print("Discord Invite: https://discord.gg/h4NMN3nXDZ")
     end
 end)
-
 print("NEXUS 2025 - Script Fully Loaded!")

@@ -1,0 +1,377 @@
+-- MERGED ESP SCRIPT: Boxes + Tracers (No Menu, Always On) - Tracers from Local Player's Feet
+-- Combines enhanced boxes (gradient glow, crisp outlines) with standalone tracers (team colors, feet targeting).
+-- Toggles: ESP:Toggle(bool), ESP.Boxes, ESP.Tracers, ESP.ShowName, ESP.TeamColors.
+-- Low lag, auto-detect players/NPCs. Stealth: No prints/warns/GUI.
+-- NPCs: Static red. Players: Dynamic team colors (green/red). Tracers from local player's feet to target feet for personal depth.
+-- Colors kept: White fill, blue lines/tracers. Default orange removed—uses blue secondary.
+-- Load in executor—everything enabled by default.
+
+local oldprint, oldwarn = print, warn
+print = function() end
+warn = function() end
+
+local ESP = {
+    Enabled = false,
+    Boxes = true,
+    BoxShift = CFrame.new(0, -1.5, 0),
+    BoxSize = Vector3.new(4, 6, 0),
+    Color = Color3.fromRGB(255, 255, 255), -- Clean white for boxes (kept)
+    SecondaryColor = Color3.fromRGB(0, 162, 255), -- Vibrant blue for outlines/tracers (kept)
+    Thickness = 1.2, -- Thinner for sleek
+    AttachShift = 1,
+    Objects = setmetatable({}, {__mode="kv"}),
+    Overrides = {},
+    Tracers = true,
+    ShowName = false,
+    MaxDistance = 500,
+    TeamColors = true, -- Enable team-based dynamic colors
+    TeamCheck = true, -- For box dynamic color
+    player = true, -- Enable player ESP
+    TracerThickness = 2, -- Matched to tracers script (thicker)
+    TracerTransparency = 0.5, -- Matched to tracers script (balanced)
+    FeetShift = CFrame.new(0, -3, 0) -- To feet for depth (kept)
+}
+
+local cam = workspace.CurrentCamera
+local plrs = game:GetService("Players")
+local plr = plrs.LocalPlayer
+local mouse = plr:GetMouse()
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local V3new = Vector3.new
+
+-- Cache for local player feet screen pos (updated in loop)
+local localFeetScreenPos = Vector2.new(0, 0)
+local localPlayerChar = nil
+local localRootPart = nil
+
+local function UpdateLocalFeetPos()
+    localPlayerChar = plr.Character
+    if localPlayerChar then
+        localRootPart = localPlayerChar:FindFirstChild("HumanoidRootPart")
+        if localRootPart then
+            local feetPos = (localRootPart.CFrame * ESP.FeetShift).Position
+            local screenPos = cam:WorldToViewportPoint(feetPos)
+            if screenPos.Z > 0 then
+                localFeetScreenPos = Vector2.new(screenPos.X, screenPos.Y)
+            end
+        end
+    end
+end
+
+local function Draw(obj, props)
+    local success, new = pcall(Drawing.new, obj)
+    if not success then return nil end
+    props = props or {}
+    for i, v in pairs(props) do
+        new[i] = v
+    end
+    return new
+end
+
+function ESP:GetColor(obj)
+    local ov = self.Overrides.GetColor
+    if ov then return ov(obj) end
+    local p = self:GetPlrFromChar(obj)
+    if self.TeamColors and p and p ~= plr then
+        if p.Team and plr.Team and p.Team == plr.Team then
+            return Color3.fromRGB(0, 255, 0) -- Green teammate (kept)
+        else
+            return Color3.fromRGB(255, 0, 0) -- Red enemy (kept)
+        end
+    end
+    return self.Color -- White default (matched, no orange)
+end
+
+function ESP:GetPlrFromChar(char)
+    local ov = self.Overrides.GetPlrFromChar
+    if ov then return ov(char) end
+    return plrs:GetPlayerFromCharacter(char)
+end
+
+function ESP:GetTracer(obj) return self.Objects[obj] end
+
+function ESP:Toggle(bool)
+    self.Enabled = bool
+    if not bool then
+        for i, v in pairs(self.Objects) do
+            if v.Type == "Box" or v.Type == "Tracer" then
+                if v.Temporary then v:Remove() else
+                    for _, comp in pairs(v.Components) do
+                        if comp then comp.Visible = false end
+                    end
+                end
+            end
+        end
+    end
+end
+
+function ESP:GetBox(obj) return self.Objects[obj] end
+
+function ESP:AddObjectListener(parent, options)
+    if not parent then return end
+    local function NewListener(c)
+        if (type(options.Type) == "string" and c:IsA(options.Type)) or options.Type == nil then
+            if type(options.Name) == "string" and c.Name == options.Name or options.Name == nil then
+                -- Non-blocking validation: Wrap in coroutine to delay without halting event flow
+                coroutine.wrap(function()
+                    task.wait(0.5)
+                    if options.Validator and not options.Validator(c) then return end
+                    if c.Parent and workspace:IsAncestorOf(c) then
+                        local espObj = ESP:Add(c, {
+                            PrimaryPart = type(options.PrimaryPart) == "string" and c:WaitForChild(options.PrimaryPart) or type(options.PrimaryPart) == "function" and options.PrimaryPart(c),
+                            Color = type(options.Color) == "function" and options.Color(c) or options.Color,
+                            ColorDynamic = options.ColorDynamic,
+                            IsEnabled = options.IsEnabled,
+                            RenderInNil = options.RenderInNil
+                        })
+                        if options.OnAdded then coroutine.wrap(options.OnAdded)(espObj) end
+                    end
+                end)()
+            end
+        end
+    end
+    if options.Recursive then
+        parent.DescendantAdded:Connect(NewListener)
+        for i, v in pairs(parent:GetDescendants()) do NewListener(v) end
+    else
+        parent.ChildAdded:Connect(NewListener)
+        for i, v in pairs(parent:GetChildren()) do NewListener(v) end
+    end
+end
+
+local espBase = {}
+espBase.__index = espBase
+
+function espBase:GetDynamicColor()
+    return ESP:GetColor(self.Object) -- Use merged GetColor with team support (white/blue base)
+end
+
+function espBase:Remove()
+    ESP.Objects[self.Object] = nil
+    if self.Highlight then self.Highlight:Destroy() self.Highlight = nil end
+    for i, v in pairs(self.Components) do
+        if v then v:Remove() self.Components[i] = nil end
+    end
+end
+
+function espBase:Update()
+    if not self.PrimaryPart then return self:Remove() end
+    local allow = true
+    if ESP.Overrides.UpdateAllow and not ESP.Overrides.UpdateAllow(self) then allow = false end
+    if self.IsEnabled and ((type(self.IsEnabled) == "string" and not ESP[self.IsEnabled]) or (type(self.IsEnabled) == "function" and not self:IsEnabled())) then allow = false end
+    if not workspace:IsAncestorOf(self.PrimaryPart) and not self.RenderInNil then allow = false end
+    if not allow then
+        for i, v in pairs(self.Components) do if v then v.Visible = false end end
+        return
+    end
+    local size = self.Size
+    local cf = self.PrimaryPart.CFrame
+    local locs = {
+        TopLeft = cam:WorldToViewportPoint((cf * ESP.BoxShift * CFrame.new(size.X / 2, size.Y / 2, 0)).Position),
+        TopRight = cam:WorldToViewportPoint((cf * ESP.BoxShift * CFrame.new(-size.X / 2, size.Y / 2, 0)).Position),
+        BottomLeft = cam:WorldToViewportPoint((cf * ESP.BoxShift * CFrame.new(size.X / 2, -size.Y / 2, 0)).Position),
+        BottomRight = cam:WorldToViewportPoint((cf * ESP.BoxShift * CFrame.new(-size.X / 2, -size.Y / 2, 0)).Position)
+    }
+    local onScreen = locs.TopLeft.Z > 0 and locs.TopRight.Z > 0 and locs.BottomLeft.Z > 0 and locs.BottomRight.Z > 0
+    if not onScreen then
+        for i, v in pairs(self.Components) do if v then v.Visible = false end end
+        return
+    end
+    local dynColor = self:GetDynamicColor()
+    -- Enhanced Box: Subtle gradient sim (darker fill edges via transparency), crisp lines (white fill, blue outlines)
+    if ESP.Boxes then
+        if self.Components.Quad then
+            self.Components.Quad.Color = dynColor -- White or team
+            self.Components.Quad.Filled = true
+            self.Components.Quad.Transparency = 0.4 -- Lighter for 'glow' effect
+            self.Components.Quad.Visible = ESP.Enabled
+            self.Components.Quad.PointA = Vector2.new(locs.TopRight.X, locs.TopRight.Y)
+            self.Components.Quad.PointB = Vector2.new(locs.TopLeft.X, locs.TopLeft.Y)
+            self.Components.Quad.PointC = Vector2.new(locs.BottomLeft.X, locs.BottomLeft.Y)
+            self.Components.Quad.PointD = Vector2.new(locs.BottomRight.X, locs.BottomRight.Y)
+        end
+        -- Ultra-crisp outlines (thinner, no gaps) - blue
+        if not self.Components.OutlineTop then
+            self.Components.OutlineTop = Draw("Line", {Thickness = ESP.Thickness, Color = ESP.SecondaryColor, Transparency = 0.3})
+            self.Components.OutlineBottom = Draw("Line", {Thickness = ESP.Thickness, Color = ESP.SecondaryColor, Transparency = 0.3})
+            self.Components.OutlineLeft = Draw("Line", {Thickness = ESP.Thickness, Color = ESP.SecondaryColor, Transparency = 0.3})
+            self.Components.OutlineRight = Draw("Line", {Thickness = ESP.Thickness, Color = ESP.SecondaryColor, Transparency = 0.3})
+        end
+        self.Components.OutlineTop.From = Vector2.new(locs.TopLeft.X, locs.TopLeft.Y)
+        self.Components.OutlineTop.To = Vector2.new(locs.TopRight.X, locs.TopRight.Y)
+        self.Components.OutlineTop.Visible = ESP.Enabled
+        self.Components.OutlineBottom.From = Vector2.new(locs.BottomLeft.X, locs.BottomLeft.Y)
+        self.Components.OutlineBottom.To = Vector2.new(locs.BottomRight.X, locs.BottomRight.Y)
+        self.Components.OutlineBottom.Visible = ESP.Enabled
+        self.Components.OutlineLeft.From = Vector2.new(locs.TopLeft.X, locs.TopLeft.Y)
+        self.Components.OutlineLeft.To = Vector2.new(locs.BottomLeft.X, locs.BottomLeft.Y)
+        self.Components.OutlineLeft.Visible = ESP.Enabled
+        self.Components.OutlineRight.From = Vector2.new(locs.TopRight.X, locs.TopRight.Y)
+        self.Components.OutlineRight.To = Vector2.new(locs.BottomRight.X, locs.BottomRight.Y)
+        self.Components.OutlineRight.Visible = ESP.Enabled
+    end
+    -- Enhanced Tracers: From local player's feet to target feet, faded transparency, team colors (blue base, matched)
+    if ESP.Tracers then
+        local color = self.ColorDynamic and ESP:GetColor(self.Object) or ESP.SecondaryColor -- Blue or team (no orange)
+        local feetPos = (cf * ESP.FeetShift).Position
+        local screenPos = cam:WorldToViewportPoint(feetPos)
+        local tracerOnScreen = screenPos.Z > 0
+        if not self.Components.Tracer then
+            self.Components.Tracer = Draw("Line", {Thickness = ESP.TracerThickness, Color = color, Transparency = ESP.TracerTransparency})
+        end
+        local tracer = self.Components.Tracer
+        local lineVisible = ESP.Enabled and tracerOnScreen
+        tracer.Visible = lineVisible
+        if lineVisible then
+            -- Use local feet pos as start (fallback to screen bottom if no local char)
+            local from = (localPlayerChar and localRootPart) and localFeetScreenPos or Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y - 100)
+            tracer.From = from
+            tracer.To = Vector2.new(screenPos.X, screenPos.Y)
+            tracer.Color = color
+            tracer.Transparency = ESP.TracerTransparency
+            tracer.Thickness = ESP.TracerThickness
+        end
+    end
+    -- Enhanced Names: Larger font, bold outline, positioned perfectly above (disabled by default)
+    if ESP.ShowName then
+        local character = self.Object
+        local head = character:FindFirstChild("Head")
+        local root = self.PrimaryPart
+        if head and root then
+            local localRoot = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+            local dist = localRoot and (root.Position - localRoot.Position).Magnitude or math.huge
+            if dist > ESP.MaxDistance then return end
+            local pos = cam:WorldToViewportPoint(head.Position + Vector3.new(0, 1.5, 0))
+            local onScreenHead = pos.Z > 0
+            if onScreenHead then
+                local name = self.Player and self.Player.DisplayName or character.Name
+                if not self.Components.Name then
+                    self.Components.Name = Draw("Text", {
+                        Size = 16, -- Larger for readability
+                        Center = true,
+                        Outline = true,
+                        OutlineColor = Color3.new(0, 0, 0), -- Bold black outline
+                        Font = Drawing.Fonts.GothamBold, -- Bolder font
+                        Color = dynColor,
+                        Transparency = 0.2
+                    })
+                end
+                self.Components.Name.Text = name
+                self.Components.Name.Position = Vector2.new(pos.X, pos.Y - 30) -- Higher for clean spacing
+                self.Components.Name.Visible = ESP.Enabled
+            else
+                if self.Components.Name then self.Components.Name.Visible = false end
+            end
+        end
+    end
+end
+
+function ESP:Add(obj, options)
+    if not obj.Parent and not options.RenderInNil then return end
+    local espObj = setmetatable({
+        Type = "Box", -- Default to box; tracers use same base
+        Color = options.Color,
+        Size = options.Size or self.BoxSize,
+        Object = obj,
+        Player = options.Player or plrs:GetPlayerFromCharacter(obj),
+        PrimaryPart = options.PrimaryPart or obj.ClassName == "Model" and (obj.PrimaryPart or obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChildWhichIsA("BasePart")) or obj:IsA("BasePart") and obj,
+        Components = {},
+        IsEnabled = options.IsEnabled,
+        Temporary = options.Temporary,
+        ColorDynamic = options.ColorDynamic,
+        RenderInNil = options.RenderInNil
+    }, espBase)
+    if not espObj.PrimaryPart then return end
+    if self:GetBox(obj) then self:GetBox(obj):Remove() end
+    espObj.Components["Quad"] = Draw("Quad", {
+        Thickness = self.Thickness,
+        Color = espObj.Color,
+        Transparency = 0.4,
+        Filled = true,
+        Visible = self.Enabled and self.Boxes
+    })
+    if not espObj.Components["Quad"] then return end
+    self.Objects[obj] = espObj
+    obj.AncestryChanged:Connect(function(_, parent)
+        if parent == nil and ESP.AutoRemove ~= false then espObj:Remove() end
+    end)
+    obj:GetPropertyChangedSignal("Parent"):Connect(function()
+        if obj.Parent == nil and ESP.AutoRemove ~= false then espObj:Remove() end
+    end)
+    local hum = obj:FindFirstChildOfClass("Humanoid")
+    if hum then hum.Died:Connect(function() if ESP.AutoRemove ~= false then espObj:Remove() end end) end
+    return espObj
+end
+
+local function CharAdded(char)
+    local p = plrs:GetPlayerFromCharacter(char)
+    local options = {Player = p, ColorDynamic = true}
+    if not char:FindFirstChild("HumanoidRootPart") then
+        local ev = char.ChildAdded:Connect(function(c)
+            if c.Name == "HumanoidRootPart" then
+                ev:Disconnect()
+                options.PrimaryPart = c
+                ESP:Add(char, options)
+            end
+        end)
+    else
+        options.PrimaryPart = char.HumanoidRootPart
+        ESP:Add(char, options)
+    end
+end
+
+local function PlayerAdded(p)
+    p.CharacterAdded:Connect(CharAdded)
+    if p.Character then coroutine.wrap(CharAdded)(p.Character) end
+end
+
+plrs.PlayerAdded:Connect(PlayerAdded)
+for i, v in pairs(plrs:GetPlayers()) do if v ~= plr then PlayerAdded(v) end end
+
+-- Update Loop (PreRender for precision, matched to tracers)
+RunService.PreRender:Connect(function()
+    cam = workspace.CurrentCamera
+    UpdateLocalFeetPos() -- Update local feet pos each frame
+    for i, v in pairs(ESP.Objects) do
+        if v.Update then pcall(v.Update, v) end
+    end
+end)
+
+ESP:Toggle(true)
+ESP.Boxes = true
+ESP.Tracers = true
+ESP.TeamColors = true
+
+-- Detection (workspace fallback for NPCs/players)
+local charBodies
+for _, folder in pairs(workspace:GetChildren()) do
+    if folder:IsA("Folder") then
+        local humanoidFound = false
+        for _, model in pairs(folder:GetChildren()) do
+            if model:FindFirstChildOfClass("Humanoid") then
+                humanoidFound = true
+                break
+            end
+        end
+        if humanoidFound then
+            charBodies = folder
+            break
+        end
+    end
+end
+if not charBodies then charBodies = workspace end
+
+ESP:AddObjectListener(charBodies, {
+    Type = "Model",
+    Color = Color3.fromRGB(255, 0, 4), -- Red for NPCs (kept)
+    PrimaryPart = function(obj) return obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChildOfClass("BasePart") end,
+    Validator = function(obj)
+        return obj:FindFirstChildOfClass("Humanoid") ~= nil
+    end,
+    Recursive = true,
+    IsEnabled = "player",
+    ColorDynamic = false -- Static red for NPCs (matched)
+})
+
+-- ENHANCEMENTS: Boxes glow subtly (white), tracers from your feet to target feet with blue/team colors/fade (no orange), names bold (off). Seamless, no clutter.

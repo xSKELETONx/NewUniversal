@@ -1,0 +1,598 @@
+-- Clean Menu Template with Cheats (Fixed Rapid Fire for Semi-Auto)
+-- Press RightShift to open/close
+-- Added: Box ESP with Health Bar (Gold Box + Green Health Bar on Left)
+-- Optimized: ESP Box calculation for less lag (uses AABB projection, only 8 points per player)
+-- Integrated: Aimbot (Cam Lock), FOV Button, AimKey Button, Aim Distance Slider, Aim FOV Slider
+-- Integrated: Speed Hack, Noclip, Infinite Jump
+local UIS = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+-- GUI Setup (same as before)
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MenuTemplate"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = game.CoreGui
+local Main = Instance.new("Frame")
+Main.Size = UDim2.new(0, 680, 0, 560)
+Main.Position = UDim2.new(0.5, -340, 0.5, -280)
+Main.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+Main.BorderColor3 = Color3.fromRGB(40, 40, 45)
+Main.BorderSizePixel = 1
+Main.Visible = false
+Main.Active = true
+Main.Draggable = true
+Main.Parent = ScreenGui
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.BackgroundColor3 = Color3.fromRGB(28, 28, 33)
+Title.Text = "Weird Gun Game Menu"
+Title.TextColor3 = Color3.fromRGB(220, 220, 220)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 18
+Title.Parent = Main
+local Close = Instance.new("TextButton")
+Close.Size = UDim2.new(0, 40, 0, 40)
+Close.Position = UDim2.new(1, -40, 0, 0)
+Close.BackgroundTransparency = 1
+Close.Text = "X"
+Close.TextColor3 = Color3.fromRGB(255, 90, 90)
+Close.Font = Enum.Font.GothamBold
+Close.TextSize = 20
+Close.Parent = Title
+Close.MouseButton1Click:Connect(function()
+    Main.Visible = false
+end)
+-- Tab System (same as before)
+local TabFrame = Instance.new("Frame")
+TabFrame.Size = UDim2.new(0, 150, 1, -40)
+TabFrame.Position = UDim2.new(0, 0, 0, 40)
+TabFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 29)
+TabFrame.Parent = Main
+local Content = Instance.new("ScrollingFrame")
+Content.Size = UDim2.new(1, -150, 1, -40)
+Content.Position = UDim2.new(0, 150, 0, 40)
+Content.BackgroundColor3 = Color3.fromRGB(22, 22, 26)
+Content.ScrollBarThickness = 4
+Content.AutomaticCanvasSize = Enum.AutomaticSize.Y
+Content.Parent = Main
+local CurrentPage = nil
+local tabCount = 0
+local function CreateTab(name)
+    tabCount += 1
+local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -10, 0, 45)
+    btn.Position = UDim2.new(0, 5, 0, 5 + (tabCount - 1) * 50)
+    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+    btn.Text = name
+    btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 16
+    btn.Parent = TabFrame
+local page = Instance.new("Frame")
+    page.Size = UDim2.new(1, -20, 0, 0)
+    page.AutomaticSize = Enum.AutomaticSize.Y
+    page.Position = UDim2.new(0, 10, 0, 10)
+    page.BackgroundTransparency = 1
+    page.Visible = false
+    page.Parent = Content
+local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 8)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = page
+local padding = Instance.new("UIPadding")
+    padding.PaddingLeft = UDim.new(0, 8)
+    padding.PaddingTop = UDim.new(0, 8)
+    padding.Parent = page
+    btn.MouseButton1Click:Connect(function()
+if CurrentPage then CurrentPage.Visible = false end
+        page.Visible = true
+        CurrentPage = page
+for _, b in TabFrame:GetChildren() do
+if b:IsA("TextButton") then
+                b.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+end
+end
+        btn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+end)
+return page
+end
+-- Tabs
+local Combat = CreateTab("Combat")
+local Movement = CreateTab("Movement")
+local Visuals = CreateTab("Visuals")
+local Misc = CreateTab("Misc")
+local Settings = CreateTab("Settings")
+-- Default tab
+Combat.Visible = true
+CurrentPage = Combat
+TabFrame:GetChildren()[1].BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+-- UI Functions (Toggle only, others omitted for brevity)
+local function AddToggle(page, name, default, callback)
+local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, 0, 0, 36)
+    frame.BackgroundColor3 = Color3.fromRGB(32, 32, 38)
+    frame.Parent = page
+local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.7, 0, 1, 0)
+    label.Position = UDim2.new(0, 12, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = name
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 15
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+local toggle = Instance.new("TextButton")
+    toggle.Size = UDim2.new(0, 56, 0, 26)
+    toggle.Position = UDim2.new(1, -68, 0.5, -13)
+    toggle.BackgroundColor3 = default and Color3.fromRGB(0, 160, 0) or Color3.fromRGB(70, 70, 70)
+    toggle.Text = default and "ON" or "OFF"
+    toggle.TextColor3 = Color3.new(1, 1, 1)
+    toggle.Font = Enum.Font.GothamBold
+    toggle.TextSize = 14
+    toggle.Parent = frame
+local state = default
+    toggle.MouseButton1Click:Connect(function()
+        state = not state
+        toggle.BackgroundColor3 = state and Color3.fromRGB(0, 160, 0) or Color3.fromRGB(70, 70, 70)
+        toggle.Text = state and "ON" or "OFF"
+if callback then callback(state) end
+end)
+end
+local function AddSlider(page, name, min, max, default, callback)
+local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1,0,0,56)
+    frame.BackgroundColor3 = Color3.fromRGB(32,32,38)
+    frame.Parent = page
+local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1,-10,0,24)
+    label.Position = UDim2.new(0,10,0,4)
+    label.BackgroundTransparency = 1
+    label.Text = name..": "..default
+    label.TextColor3 = Color3.new(1,1,1)
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 14
+    label.Parent = frame
+local bar = Instance.new("Frame")
+    bar.Size = UDim2.new(1,-24,0,10)
+    bar.Position = UDim2.new(0,12,0,34)
+    bar.BackgroundColor3 = Color3.fromRGB(50,50,55)
+    bar.Parent = frame
+local fill = Instance.new("Frame")
+    fill.Size = UDim2.new((default-min)/(max-min),0,1,0)
+    fill.BackgroundColor3 = Color3.fromRGB(180,180,180)
+    fill.Parent = bar
+local dragging = false
+    bar.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true end end)
+    bar.InputEnded:Connect(function() dragging = false end)
+    UIS.InputChanged:Connect(function(i)
+if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+local percent = math.clamp((i.Position.X - bar.AbsolutePosition.X)/bar.AbsoluteSize.X, 0, 1)
+local val = math.floor(min + (max-min)*percent)
+            fill.Size = UDim2.new(percent,0,1,0)
+            label.Text = name..": "..val
+if callback then callback(val) end
+end
+end)
+if callback then callback(default) end
+end
+-- Open/Close Menu
+UIS.InputBegan:Connect(function(input)
+if input.KeyCode == Enum.KeyCode.RightShift then
+        Main.Visible = not Main.Visible
+end
+end)
+-- Cheat Flags
+local infAmmo = false
+local zeroRecoil = false
+local rapidFire = false
+-- Original values storage
+local originals = {}
+-- Main cheat loop with proper restore + Rapid Fire fix for semi-auto
+spawn(function()
+while true do
+        task.wait(0.1)
+pcall(function()
+if not LocalPlayer.Character then return end
+for _, tool in pairs(LocalPlayer.Character:GetChildren()) do
+if tool:IsA("Tool") then
+                    originals[tool] = originals[tool] or {}
+-- Infinite Ammo
+if infAmmo then
+if not originals[tool]._ammo then
+                            originals[tool]._ammo = tool:GetAttribute("_ammo") or 30
+                            originals[tool].magazineSize = tool:GetAttribute("magazineSize") or 30
+end
+                        tool:SetAttribute("_ammo", 999999999)
+                        tool:SetAttribute("magazineSize", 999999999)
+else
+if originals[tool]._ammo then
+                            tool:SetAttribute("_ammo", originals[tool]._ammo)
+                            tool:SetAttribute("magazineSize", originals[tool].magazineSize)
+                            originals[tool]._ammo = nil
+                            originals[tool].magazineSize = nil
+end
+end
+-- Zero Recoil
+if zeroRecoil then
+if not originals[tool].recoilMax then
+                            originals[tool].recoilMax = tool:GetAttribute("recoilMax") or Vector2.new(1,1)
+                            originals[tool].recoilMin = tool:GetAttribute("recoilMin") or Vector2.new(0,0)
+                            originals[tool].recoilAimReduction = tool:GetAttribute("recoilAimReduction") or Vector2.new(0,0)
+end
+                        tool:SetAttribute("recoilMax", Vector2.new(0,0))
+                        tool:SetAttribute("recoilMin", Vector2.new(0,0))
+                        tool:SetAttribute("recoilAimReduction", Vector2.new(0,0))
+else
+if originals[tool].recoilMax then
+                            tool:SetAttribute("recoilMax", originals[tool].recoilMax)
+                            tool:SetAttribute("recoilMin", originals[tool].recoilMin)
+                            tool:SetAttribute("recoilAimReduction", originals[tool].recoilAimReduction)
+                            originals[tool].recoilMax = nil
+                            originals[tool].recoilMin = nil
+                            originals[tool].recoilAimReduction = nil
+end
+end
+-- Rapid Fire (now works on semi-auto too)
+if rapidFire then
+if not originals[tool].rateOfFire then
+                            originals[tool].rateOfFire = tool:GetAttribute("rateOfFire") or 600
+end
+if not originals[tool].fireMode then
+                            originals[tool].fireMode = tool:GetAttribute("fireMode") or "Semi"
+end
+                        tool:SetAttribute("rateOfFire", 9999999)
+                        tool:SetAttribute("fireMode", "Auto") -- Forces semi-auto guns to full-auto
+else
+if originals[tool].rateOfFire then
+                            tool:SetAttribute("rateOfFire", originals[tool].rateOfFire)
+                            tool:SetAttribute("fireMode", originals[tool].fireMode)
+                            originals[tool].rateOfFire = nil
+                            originals[tool].fireMode = nil
+end
+end
+end
+end
+-- Cleanup dead tools
+for t in pairs(originals) do
+if not t.Parent then originals[t] = nil end
+end
+end)
+end
+end)
+-- Toggles
+AddToggle(Combat, "Infinite Ammo", false, function(state) infAmmo = state end)
+AddToggle(Combat, "Zero Recoil", false, function(state) zeroRecoil = state end)
+AddToggle(Combat, "Rapid Fire", false, function(state) rapidFire = state end)
+-- Visuals: Tracers + Box ESP
+getgenv().TracerEnabled = false
+getgenv().BoxESPEnabled = false
+getgenv().ESPTeamCheck = true
+getgenv().ESPMaxDistance = 500
+getgenv().ESPAlpha = 0.8
+local VisualsDrawings = { Drawings = {} }
+local function CreateVisuals(plr)
+if plr == LocalPlayer or VisualsDrawings.Drawings[plr] then return end
+if getgenv().ESPTeamCheck and plr.Team and LocalPlayer.Team and plr.Team == LocalPlayer.Team then return end
+local Tracer = Drawing.new("Line")
+    Tracer.Thickness = 3.0
+    Tracer.Color = Color3.fromRGB(255, 215, 0)
+    Tracer.Transparency = 1
+-- Box Outline (Gold)
+local Outline = Drawing.new("Square")
+Outline.Thickness = 1.4
+Outline.Color = Color3.fromRGB(255, 215, 0)
+Outline.Filled = false
+Outline.Transparency = 1
+-- Box Fill (Black)
+local Fill = Drawing.new("Square")
+Fill.Color = Color3.fromRGB(0, 0, 0)
+Fill.Filled = true
+Fill.Transparency = 0.72
+-- Health Background
+local HealthBG = Drawing.new("Square")
+HealthBG.Color = Color3.fromRGB(25, 25, 25)
+HealthBG.Filled = true
+-- Health Bar (Green)
+local HealthBar = Drawing.new("Square")
+HealthBar.Color = Color3.fromRGB(50, 255, 50)
+HealthBar.Filled = true
+    VisualsDrawings.Drawings[plr] = {Tracer, Outline, Fill, HealthBG, HealthBar}
+end
+local function GetTracerStart()
+return Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+end
+local function GetBox(char)
+local minVec = Vector3.new(math.huge, math.huge, math.huge)
+local maxVec = Vector3.new(-math.huge, -math.huge, -math.huge)
+for _, part in ipairs(char:GetChildren()) do
+if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+local pos = part.Position
+local halfSize = part.Size / 2
+            minVec = Vector3.new(
+                math.min(minVec.X, pos.X - halfSize.X),
+                math.min(minVec.Y, pos.Y - halfSize.Y),
+                math.min(minVec.Z, pos.Z - halfSize.Z)
+)
+            maxVec = Vector3.new(
+                math.max(maxVec.X, pos.X + halfSize.X),
+                math.max(maxVec.Y, pos.Y + halfSize.Y),
+                math.max(maxVec.Z, pos.Z + halfSize.Z)
+)
+end
+end
+if minVec.X == math.huge then return nil end
+local corners = {
+        Vector3.new(minVec.X, minVec.Y, minVec.Z),
+        Vector3.new(maxVec.X, minVec.Y, minVec.Z),
+        Vector3.new(minVec.X, maxVec.Y, minVec.Z),
+        Vector3.new(maxVec.X, maxVec.Y, minVec.Z),
+        Vector3.new(minVec.X, minVec.Y, maxVec.Z),
+        Vector3.new(maxVec.X, minVec.Y, maxVec.Z),
+        Vector3.new(minVec.X, maxVec.Y, maxVec.Z),
+        Vector3.new(maxVec.X, maxVec.Y, maxVec.Z),
+}
+local minScreen = Vector2.new(math.huge, math.huge)
+local maxScreen = Vector2.new(-math.huge, -math.huge)
+local onScreen = false
+for _, corner in ipairs(corners) do
+local screen, visible = Camera:WorldToViewportPoint(corner)
+if visible then
+            onScreen = true
+            minScreen = Vector2.new(math.min(minScreen.X, screen.X), math.min(minScreen.Y, screen.Y))
+            maxScreen = Vector2.new(math.max(maxScreen.X, screen.X), math.max(maxScreen.Y, screen.Y))
+end
+end
+if not onScreen then return nil end
+local size = Vector2.new(math.max(maxScreen.X - minScreen.X, 18), math.max(maxScreen.Y - minScreen.Y, 30))
+return minScreen, size
+end
+RunService.RenderStepped:Connect(function()
+if not (getgenv().TracerEnabled or getgenv().BoxESPEnabled) then
+for plr, drawings in pairs(VisualsDrawings.Drawings) do
+for _, d in pairs(drawings) do d.Visible = false end
+end
+return
+end
+local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+if not myRoot then return end
+local tracerStart = GetTracerStart()
+for plr, drawings in pairs(VisualsDrawings.Drawings) do
+local Tracer, Outline, Fill, HealthBG, HealthBar = unpack(drawings)
+local char = plr.Character
+if not char or not char:FindFirstChild("HumanoidRootPart") or not char:FindFirstChild("Humanoid") or char.Humanoid.Health <= 0 then
+            Tracer.Visible = false
+            Outline.Visible = false
+            Fill.Visible = false
+            HealthBG.Visible = false
+            HealthBar.Visible = false
+            continue
+end
+local root = char.HumanoidRootPart
+local dist = (root.Position - myRoot.Position).Magnitude
+if dist > getgenv().ESPMaxDistance then
+            Tracer.Visible = false
+            Outline.Visible = false
+            Fill.Visible = false
+            HealthBG.Visible = false
+            HealthBar.Visible = false
+            continue
+end
+local alpha = math.clamp(1 - (dist/getgenv().ESPMaxDistance), 0.3, 1)
+local head = char:FindFirstChild("Head")
+local headPos, onScreen = nil, false
+if head then
+    headPos, onScreen = Camera:WorldToViewportPoint(head.Position)
+end
+if getgenv().TracerEnabled and onScreen then
+        Tracer.From = tracerStart
+        Tracer.To = Vector2.new(headPos.X, headPos.Y)
+        Tracer.Visible = true
+        Tracer.Transparency = alpha * getgenv().ESPAlpha * 0.9
+else
+    Tracer.Visible = false
+end
+local pos, size = GetBox(char)
+if getgenv().BoxESPEnabled and pos then
+local hp = char.Humanoid.Health / char.Humanoid.MaxHealth
+local healthHeight = size.Y * hp
+local healthX = pos.X - 5
+-- Box Fill
+    Fill.Position = pos
+    Fill.Size = size
+    Fill.Visible = true
+    Fill.Transparency = 0.72 * alpha
+-- Box Outline
+    Outline.Position = pos - Vector2.new(0.5, 0.5)
+    Outline.Size = size + Vector2.new(1, 1)
+    Outline.Visible = true
+    Outline.Transparency = alpha
+-- Health Background
+    HealthBG.Position = Vector2.new(healthX, pos.Y)
+    HealthBG.Size = Vector2.new(3, size.Y)
+    HealthBG.Visible = true
+    HealthBG.Transparency = 0.6 * alpha
+-- Health Bar
+    HealthBar.Position = Vector2.new(healthX, pos.Y + size.Y - healthHeight)
+    HealthBar.Size = Vector2.new(3, healthHeight)
+    HealthBar.Visible = true
+    HealthBar.Transparency = alpha
+else
+    Outline.Visible = false
+    Fill.Visible = false
+    HealthBG.Visible = false
+    HealthBar.Visible = false
+end
+end
+end)
+for _, p in pairs(Players:GetPlayers()) do
+if p ~= LocalPlayer then CreateVisuals(p) end
+    p.CharacterAdded:Connect(function() task.wait(1) CreateVisuals(p) end)
+end
+Players.PlayerAdded:Connect(function(p)
+    p.CharacterAdded:Connect(function() task.wait(1) CreateVisuals(p) end)
+end)
+AddToggle(Visuals, "Aimline/Tracers", false, function(state) getgenv().TracerEnabled = state end)
+AddToggle(Visuals, "Box ESP", false, function(state) getgenv().BoxESPEnabled = state end)
+-- Integrated Aimbot Features
+getgenv().AimKey = Enum.UserInputType.MouseButton2
+getgenv().AimFOV = 150
+getgenv().AimDistance = 300
+getgenv().AimbotEnabled = false
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 2
+FOVCircle.Color = Color3.fromRGB(255, 215, 0) -- Gold like visuals
+FOVCircle.Filled = false
+FOVCircle.Radius = getgenv().AimFOV
+FOVCircle.Visible = false
+RunService.RenderStepped:Connect(function()
+    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    FOVCircle.Radius = getgenv().AimFOV
+end)
+local keyNames = {[Enum.UserInputType.MouseButton1] = "Left Click", [Enum.UserInputType.MouseButton2] = "Right Click"}
+local AimKeyButton = Instance.new("TextButton")
+AimKeyButton.Size = UDim2.new(1,0,0,36)
+AimKeyButton.BackgroundColor3 = Color3.fromRGB(32,32,38)
+AimKeyButton.Text = "Aim Key: "..keyNames[getgenv().AimKey]
+AimKeyButton.TextColor3 = Color3.new(1,1,1)
+AimKeyButton.Font = Enum.Font.GothamBold
+AimKeyButton.TextSize = 15
+AimKeyButton.Parent = Combat
+AimKeyButton.MouseButton1Click:Connect(function()
+    getgenv().AimKey = getgenv().AimKey == Enum.UserInputType.MouseButton1 and Enum.UserInputType.MouseButton2 or Enum.UserInputType.MouseButton1
+    AimKeyButton.Text = "Aim Key: "..keyNames[getgenv().AimKey]
+end)
+local ShowFOVButton = Instance.new("TextButton")
+ShowFOVButton.Size = UDim2.new(1,0,0,36)
+ShowFOVButton.BackgroundColor3 = Color3.fromRGB(32,32,38)
+ShowFOVButton.Text = "Show FOV"
+ShowFOVButton.TextColor3 = Color3.new(1,1,1)
+ShowFOVButton.Font = Enum.Font.GothamBold
+ShowFOVButton.TextSize = 15
+ShowFOVButton.Parent = Combat
+ShowFOVButton.MouseButton1Click:Connect(function()
+    FOVCircle.Visible = not FOVCircle.Visible
+    ShowFOVButton.Text = FOVCircle.Visible and "Hide FOV" or "Show FOV"
+end)
+AddToggle(Combat, "Aimbot {Cam Lock}", false, function(state) getgenv().AimbotEnabled = state end)
+AddSlider(Combat, "Aim Distance", 10, 1000, 300, function(v) getgenv().AimDistance = v end)
+AddSlider(Combat, "Aim FOV (pixels)", 50, 500, 150, function(v) getgenv().AimFOV = v end)
+local lastTarget = nil
+RunService:BindToRenderStep("SimpleAimbot", Enum.RenderPriority.Camera.Value + 1, function()
+if not getgenv().AimbotEnabled then
+        lastTarget = nil
+return
+end
+if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        lastTarget = nil
+return
+end
+if not UIS:IsMouseButtonPressed(getgenv().AimKey) then
+        lastTarget = nil
+return
+end
+local closestTarget = nil
+local closestDist = getgenv().AimFOV
+for _, player in pairs(Players:GetPlayers()) do
+if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+if humanoid and humanoid.Health > 0 then
+local isEnemy = not getgenv().ESPTeamCheck or not player.Team or player.Team ~= LocalPlayer.Team
+if isEnemy then
+local headPos, onScreen = Camera:WorldToViewportPoint(player.Character.Head.Position)
+local dist3D = (LocalPlayer.Character.HumanoidRootPart.Position - player.Character.Head.Position).Magnitude
+if onScreen and dist3D <= getgenv().AimDistance then
+local screenPos = Vector2.new(headPos.X, headPos.Y)
+local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+local dist2D = (screenPos - center).Magnitude
+if dist2D < closestDist then
+                            closestDist = dist2D
+                            closestTarget = player.Character.Head
+end
+end
+end
+end
+end
+end
+if closestTarget then
+        lastTarget = closestTarget
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, closestTarget.Position)
+else
+        lastTarget = nil
+end
+end)
+-- Integrated Movement Features
+getgenv().SpeedHackEnabled = false
+getgenv().SpeedValue = 100
+getgenv().NoClipEnabled = false
+getgenv().InfiniteJumpEnabled = false
+local speedConn, noclipConn, infJumpConn = nil, nil, nil
+local function updateSpeed()
+if speedConn then speedConn:Disconnect() speedConn = nil end
+local char = LocalPlayer.Character
+if char then
+local hum = char:FindFirstChildOfClass("Humanoid")
+if hum then
+if getgenv().SpeedHackEnabled then
+                hum.WalkSpeed = getgenv().SpeedValue
+else
+                hum.WalkSpeed = 16
+end
+end
+end
+if getgenv().SpeedHackEnabled then
+        speedConn = RunService.Heartbeat:Connect(function()
+local char = LocalPlayer.Character
+if char then
+local hum = char:FindFirstChildOfClass("Humanoid")
+if hum then hum.WalkSpeed = getgenv().SpeedValue end
+end
+end)
+end
+end
+local function updateNoclip()
+if noclipConn then noclipConn:Disconnect() noclipConn = nil end
+local char = LocalPlayer.Character
+if char then
+for _, part in pairs(char:GetDescendants()) do
+if part:IsA("BasePart") then
+                part.CanCollide = true
+end
+end
+end
+if getgenv().NoClipEnabled then
+        noclipConn = RunService.Stepped:Connect(function()
+local char = LocalPlayer.Character
+if char then
+for _, part in pairs(char:GetDescendants()) do
+if part:IsA("BasePart") then
+                        part.CanCollide = false
+end
+end
+end
+end)
+end
+end
+local function updateInfJump()
+if infJumpConn then infJumpConn:Disconnect() infJumpConn = nil end
+if getgenv().InfiniteJumpEnabled then
+        infJumpConn = UIS.JumpRequest:Connect(function()
+local char = LocalPlayer.Character
+local hum = char and char:FindFirstChildOfClass("Humanoid")
+if hum then hum:ChangeState("Jumping") end
+end)
+end
+end
+LocalPlayer.CharacterAdded:Connect(function(char)
+    task.wait(0.5)
+    updateSpeed()
+    updateNoclip()
+    updateInfJump()
+end)
+AddToggle(Movement, "Speed Hack", false, function(v) getgenv().SpeedHackEnabled = v updateSpeed() end)
+AddToggle(Movement, "Noclip", false, function(v) getgenv().NoClipEnabled = v updateNoclip() end)
+AddToggle(Movement, "Infinite Jump", false, function(v) getgenv().InfiniteJumpEnabled = v updateInfJump() end)
+AddSlider(Movement, "Speed Value", 16, 500, 100, function(v) getgenv().SpeedValue = v updateSpeed() end)
+print("Weird Gun Game Menu Loaded! Rapid Fire now works on semi-auto guns too! Added Box ESP with Health Bar. Optimized for no lag. Integrated Aimbot and Movement features.")
